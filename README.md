@@ -1,12 +1,9 @@
 # Neuromorphic Webcam — See what an event camera Sees and how it works
 
-```bash
-python3 -m http.server 8000
-```
+### ▶ [Try the live demo](https://measums-neuromorphic-webcam.static.hf.space)
 
-Then open <http://localhost:8000>. Serve it rather than opening the file
-directly — browsers only grant camera access to a real origin, and `file://`
-is not one. No install, no build step, no dependencies.
+Turn on your camera and hold still — you disappear. Nothing is installed and no
+video leaves your browser.
 
 A normal camera samples every pixel on a fixed clock and ships the whole frame,
 whether or not anything happened. An **event camera** gives each pixel its own
@@ -102,15 +99,16 @@ Simplified against real silicon:
 ## Repo layout
 
 ```
-src/app.html     the whole thing — model, rendering, UI, ~600 lines, zero dependencies
-scripts/build.py wraps src/app.html into a standalone index.html
-index.html       generated; what GitHub Pages serves
+src/app.html         the whole thing — model, rendering, UI, zero dependencies
+scripts/build.py     wraps src/app.html into a standalone index.html
+scripts/deploy_hf.py builds, then pushes to the Hugging Face Space
+index.html           generated; what the Space serves
 ```
 
-Rebuild after editing the source:
+Edit `src/app.html`, then rebuild and redeploy in one step:
 
 ```bash
-python3 scripts/build.py
+python3 scripts/deploy_hf.py
 ```
 
 ---
@@ -121,6 +119,7 @@ python3 scripts/build.py
 - **Gallego et al. (2020).** [Event-based Vision: A Survey](https://arxiv.org/abs/1904.08405). *IEEE TPAMI* — the field's reference text.
 - **Hu, Liu & Delbrück (2021).** [v2e: From Video Frames to Realistic DVS Events](https://arxiv.org/abs/2006.07722). *CVPRW* — realistic frame-to-event conversion.
 
-Companion project: [event-snn-detection](../event-snn-detection) — spiking
-networks trained on real event-camera data, with measured accuracy/energy
-trade-offs.
+Companion project: [Energy-efficient event-camera perception with spiking neural
+networks](https://github.com/Syedmeasum14/Energy-efficient-event-camera-perception-with-spiking-neural-networks-measuring-the-accuracy-energy)
+— spiking networks trained on real event-camera recordings, with measured
+accuracy and energy trade-offs.
