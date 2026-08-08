@@ -1,4 +1,4 @@
-# Neuromorphic Webcam — see what an event camera sees
+# Neuromorphic Webcam — See what an event camera Sees and how it works
 
 ```bash
 python3 -m http.server 8000
