@@ -45,6 +45,12 @@ This Space runs that pixel model live. Left panel: the frame. Right panel:
 everything the sensor would actually have transmitted. Turn on your camera and
 hold still — you disappear.
 
+![Left: an ordinary camera transmitting the complete picture. Right: an event
+camera transmitting only what moved.](docs/comparison.png)
+
+![One pixel over three seconds: the brightness it sees, the stepped reference
+it remembers, and the events it emits.](docs/pixel-diagram.png)
+
 **For camera access, open the direct Space URL** ({direct}) rather than viewing
 it embedded, since embedded frames withhold camera permission.
 
@@ -84,6 +90,16 @@ def main() -> None:
         repo_type="space",
         commit_message="Update Space description",
     )
+
+    # screenshots the Space README embeds
+    for shot in sorted((ROOT / "docs").glob("*.png")):
+        api.upload_file(
+            path_or_fileobj=str(shot),
+            path_in_repo=f"docs/{shot.name}",
+            repo_id=repo_id,
+            repo_type="space",
+            commit_message=f"Update {shot.name}",
+        )
 
     print("\nSpace:  https://huggingface.co/spaces/" + repo_id)
     print("Direct: " + direct + "   <- share this one; the camera works here")

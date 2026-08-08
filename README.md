@@ -5,6 +5,11 @@
 Turn on your camera and hold still — you disappear. Nothing is installed and no
 video leaves your browser.
 
+![The same scene through both sensors. Left: an ordinary camera transmitting the
+complete picture. Right: an event camera transmitting only the moving bar, the
+orbiting disc and the drifting grating — the wall, the floor and the block
+marked STATIC produce nothing at all.](docs/comparison.png)
+
 A normal camera samples every pixel on a fixed clock and ships the whole frame,
 whether or not anything happened. An **event camera** gives each pixel its own
 trigger: report only when the light it sees changes, and stay silent otherwise.
@@ -22,6 +27,12 @@ three seconds, the stepped reference it remembers, and the events that come
 out. It runs the same threshold rule as the simulation and redraws whenever
 you move the contrast slider, so the control and the concept stay tied
 together.
+
+![One pixel over three seconds. The pale trace is the brightness it sees; the
+amber staircase is the only thing it remembers, the brightness it last
+reported. Each time the two diverge by more than the threshold it emits an
+event — blue upward, red downward — and moves the staircase to
+match.](docs/pixel-diagram.png)
 
 ---
 
