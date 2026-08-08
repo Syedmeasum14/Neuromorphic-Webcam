@@ -1,0 +1,1339 @@
+<title>Neuromorphic Webcam — see what an event camera sees</title>
+
+<style>
+  :root {
+    --ground:  #0E1116;
+    --panel:   #151A21;
+    --raise:   #1C222B;
+    --line:    #262F3B;
+    --text:    #DCE3EC;
+    --muted:   #8895A6;
+    --faint:   #5B6675;
+    --accent:  #E8B33C;
+    --on:      #35A7FF;
+    --off:     #FF4D5A;
+    --screen:  #0B0E13;
+
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #EEF1F5; --panel: #FFFFFF; --raise: #F6F8FA; --line: #D5DCE5;
+      --text: #161C24; --muted: #58646F; --faint: #8390A0;
+      --accent: #8A5D0C; --on: #0B72D4; --off: #CE2433;
+    }
+  }
+
+  :root[data-theme="light"] {
+    --ground: #EEF1F5; --panel: #FFFFFF; --raise: #F6F8FA; --line: #D5DCE5;
+    --text: #161C24; --muted: #58646F; --faint: #8390A0;
+    --accent: #8A5D0C; --on: #0B72D4; --off: #CE2433;
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0E1116; --panel: #151A21; --raise: #1C222B; --line: #262F3B;
+    --text: #DCE3EC; --muted: #8895A6; --faint: #5B6675;
+    --accent: #E8B33C; --on: #35A7FF; --off: #FF4D5A;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 44px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 44px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(27px, 4.2vw, 42px);
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    line-height: 1.14;
+    text-wrap: balance;
+    margin: 0 0 18px;
+  }
+
+  .lede {
+    max-width: 64ch;
+    color: var(--muted);
+    font-size: 17px;
+    margin: 0;
+  }
+  .lede strong { color: var(--text); font-weight: 600; }
+
+  /* ---- orientation strip ---- */
+
+  .orient {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    margin-top: 26px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+  }
+  @media (max-width: 720px) { .orient { grid-template-columns: 1fr; gap: 12px; } }
+
+  .orient div { display: flex; flex-direction: column; gap: 3px; }
+  .orient .k {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .orient .v { font-size: 14px; color: var(--muted); }
+
+  /* ---- viewports ---- */
+
+  .stage { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 780px) { .stage { grid-template-columns: 1fr; } }
+
+  .view {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--panel);
+  }
+
+  .view figcaption {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 13px;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .view figcaption .sub {
+    color: var(--faint);
+    letter-spacing: 0.03em;
+    text-transform: none;
+  }
+
+  .screen { position: relative; background: var(--screen); }
+
+  .screen canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: var(--screen);
+  }
+  #evView { image-rendering: pixelated; }
+
+  .readout {
+    padding: 12px 13px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+  }
+
+  .polarity-key { display: flex; gap: 13px; align-items: center; }
+  .polarity-key span { display: flex; align-items: center; gap: 5px; }
+  .swatch { width: 8px; height: 8px; border-radius: 50%; }
+  .swatch.on  { background: var(--on); }
+  .swatch.off { background: var(--off); }
+
+  .cta-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+    padding: 16px 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--accent);
+    border-radius: 3px;
+  }
+  .cta-bar.warn { border-left-color: var(--off); }
+
+  .cta-copy { margin: 0; font-size: 14.5px; color: var(--muted); max-width: 78ch; }
+  .cta-copy strong { color: var(--text); font-weight: 600; }
+
+  .cta-bar button.cta {
+    margin-left: 0;
+    border-radius: 2px;
+    padding: 10px 18px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--ground);
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .cta-bar button.cta:hover { filter: brightness(1.08); }
+  .cta-bar button.cta[hidden] { display: none; }
+
+  /* ---- try this ---- */
+
+  .trythis {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  @media (max-width: 780px) { .trythis { grid-template-columns: 1fr; } }
+
+  .step { background: var(--panel); padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; }
+  .step .n {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .step .t { font-weight: 600; font-size: 15px; }
+  .step .d { font-size: 14px; color: var(--muted); }
+
+  /* ---- telemetry ---- */
+
+  .telemetry {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  @media (max-width: 900px) {
+    .telemetry { grid-template-columns: repeat(2, 1fr); }
+    .telemetry .tile.headline { grid-column: 1 / -1; }
+  }
+
+  .tile { background: var(--panel); padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 3px; }
+  .tile .label {
+    font-family: var(--mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--faint);
+  }
+  .tile .value {
+    font-family: var(--mono);
+    font-size: 25px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.015em;
+  }
+  .tile .value .unit { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 3px; }
+  .tile .hint { font-size: 12px; line-height: 1.45; color: var(--faint); margin-top: 2px; }
+  .spark { display: block; width: 100%; height: 28px; margin: 4px 0 2px; }
+  .tile.headline { background: var(--raise); }
+  .tile.headline .value { color: var(--accent); }
+
+  /* ---- controls ---- */
+
+  .controls {
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--panel);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .row { display: flex; flex-wrap: wrap; gap: 22px 30px; align-items: flex-start; }
+
+  .seg { display: flex; flex-direction: column; gap: 7px; }
+  .seg > .label,
+  .slider .head {
+    font-family: var(--mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .btns { display: flex; }
+
+  button {
+    font-family: var(--mono);
+    font-size: 12px; letter-spacing: 0.04em;
+    color: var(--muted);
+    background: var(--raise);
+    border: 1px solid var(--line);
+    margin-left: -1px;
+    padding: 7px 13px;
+    cursor: pointer;
+    transition: color .12s, background .12s, border-color .12s;
+  }
+  .btns button:first-child { margin-left: 0; border-radius: 2px 0 0 2px; }
+  .btns button:last-child { border-radius: 0 2px 2px 0; }
+  button:hover { color: var(--text); }
+  button[aria-pressed="true"] {
+    color: var(--ground); background: var(--accent); border-color: var(--accent);
+    position: relative; z-index: 1;
+  }
+  button:focus-visible, input:focus-visible, select:focus-visible,
+  label.file:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .slider { display: flex; flex-direction: column; gap: 7px; width: 196px; }
+  .slider .head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .slider .head output {
+    color: var(--text); font-size: 12px; letter-spacing: 0;
+    text-transform: none; font-variant-numeric: tabular-nums;
+  }
+  .slider .why { font-size: 12px; line-height: 1.45; color: var(--faint); }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 2px;
+    background: var(--line); border-radius: 2px; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px;
+    border-radius: 50%; background: var(--accent); border: none; cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--accent); border: none; cursor: pointer;
+  }
+
+  select {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--text); background: var(--raise);
+    border: 1px solid var(--line); border-radius: 2px;
+    padding: 7px 10px; cursor: pointer;
+  }
+
+  label.file {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--muted); background: var(--raise);
+    border: 1px solid var(--line); border-radius: 2px;
+    padding: 7px 13px; cursor: pointer;
+  }
+  label.file:hover { color: var(--text); }
+  label.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+  .status { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0; min-height: 1.4em; }
+  .status.warn { color: var(--off); }
+
+  /* ---- explainer sections ---- */
+
+  section.block { display: flex; flex-direction: column; gap: 18px; }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: 13px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  .block p { margin: 0; color: var(--muted); max-width: 68ch; }
+  .block p strong { color: var(--text); font-weight: 600; }
+
+  .diagram {
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--panel);
+    padding: 16px;
+  }
+  .diagram canvas { display: block; width: 100%; height: auto; }
+
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+  @media (max-width: 780px) { .cols { grid-template-columns: 1fr; gap: 20px; } }
+  .cols h3 {
+    font-size: 15px; font-weight: 600; margin: 0 0 5px;
+    color: var(--text);
+  }
+  .cols p { font-size: 14px; }
+
+  .math {
+    font-family: var(--mono);
+    font-size: 13px; line-height: 1.9;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--accent);
+    border-radius: 2px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .limits { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; max-width: 68ch; }
+  .limits li {
+    font-size: 14px; color: var(--muted);
+    padding-left: 1.15em; text-indent: -1.15em;
+  }
+  .limits li::before { content: "— "; color: var(--faint); }
+
+  .refs { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; max-width: 68ch; font-size: 14px; color: var(--muted); }
+  .refs .who { color: var(--text); }
+  .refs a { color: var(--accent); text-underline-offset: 3px; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 22px;
+    font-size: 13px;
+    color: var(--faint);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="page">
+
+  <header>
+    <p class="eyebrow">Neuromorphic webcam · event-based vision</p>
+    <h1>Your camera has no idea what just moved.</h1>
+    <p class="lede">Every camera you own works one way: wake all the pixels on a clock, ship the entire picture, repeat thirty times a second — the motionless wall behind you included. An <strong>event camera</strong> throws that out. Each pixel watches its own patch of light and speaks only when that light changes. Nothing moves, nothing is sent. This page runs one of those sensors, live, on whatever you point it at.</p>
+
+    <div class="orient">
+      <div>
+        <span class="k">Left panel</span>
+        <span class="v">An ordinary camera. The complete picture, every frame.</span>
+      </div>
+      <div>
+        <span class="k">Right panel</span>
+        <span class="v">The same scene through an event camera. Only what changed.</span>
+      </div>
+      <div>
+        <span class="k">The numbers</span>
+        <span class="v">Measured live from what you are pointing at, not looked up.</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="cta-bar" id="camBar">
+    <p class="cta-copy">
+      <strong id="camTitle">Point it at yourself.</strong>
+      <span id="camSub">Hold still and you disappear. Move and you come back as edges. Your video is processed inside this page and never uploaded anywhere.</span>
+    </p>
+    <button class="cta" id="camStart">Turn on camera</button>
+  </section>
+
+  <section class="stage">
+    <figure class="view">
+      <figcaption>
+        <span>Ordinary camera</span>
+        <span class="sub" id="srcNote">demo scene</span>
+      </figcaption>
+      <div class="screen">
+        <canvas id="srcView" width="240" height="180"></canvas>
+      </div>
+      <p class="readout">What your webcam actually transmits: a full picture, whether or not anything happened in it.</p>
+    </figure>
+
+    <figure class="view">
+      <figcaption>
+        <span>Event camera</span>
+        <span class="polarity-key">
+          <span><i class="swatch on"></i>brighter</span>
+          <span><i class="swatch off"></i>darker</span>
+        </span>
+      </figcaption>
+      <div class="screen">
+        <canvas id="evView" width="240" height="180"></canvas>
+      </div>
+      <p class="readout">Everything the event camera would have transmitted. Black is not darkness — it is silence, pixels with nothing to report.</p>
+    </figure>
+  </section>
+
+  <section class="trythis">
+    <div class="step">
+      <span class="n">Try first</span>
+      <span class="t">Stop moving</span>
+      <span class="d">The right panel drains to black and the event rate collapses. A sensor that sees nothing sends nothing — that is the entire idea, in one gesture.</span>
+    </div>
+    <div class="step">
+      <span class="n">Then</span>
+      <span class="t">Wave a hand</span>
+      <span class="d">You return as outlines only. Blue where a pixel got brighter, red where it got darker. The flat middle of your shirt never appears, because nothing there is changing.</span>
+    </div>
+    <div class="step">
+      <span class="n">Then</span>
+      <span class="t">Drag the threshold</span>
+      <span class="d">At 0.03 the sensor is so touchy it reports its own noise. At 0.50 only fast, hard edges survive. Real hardware lives between 0.15 and 0.25.</span>
+    </div>
+  </section>
+
+  <section class="telemetry">
+    <div class="tile">
+      <span class="label">Event rate</span>
+      <span class="value" id="statRate">0<span class="unit">k ev/s</span></span>
+      <canvas class="spark" id="rateSpark" width="480" height="80" aria-hidden="true"></canvas>
+      <span class="hint">Individual pixel-level changes reported per second, over the last few seconds.</span>
+    </div>
+    <div class="tile">
+      <span class="label">Pixels firing</span>
+      <span class="value" id="statActive">0<span class="unit">%</span></span>
+      <span class="hint">Share of the array with anything to say this frame.</span>
+    </div>
+    <div class="tile">
+      <span class="label">Frame stream</span>
+      <span class="value" id="statFrameBw">0<span class="unit">kB/s</span></span>
+      <span class="hint">What the ordinary camera sends, uncompressed.</span>
+    </div>
+    <div class="tile">
+      <span class="label">Event stream</span>
+      <span class="value" id="statEventBw">0<span class="unit">kB/s</span></span>
+      <span class="hint">What the event camera sends instead.</span>
+    </div>
+    <div class="tile headline">
+      <span class="label">Data avoided</span>
+      <span class="value" id="statRatio">0<span class="unit">×</span></span>
+      <span class="hint">How much less is leaving the sensor right now. Sit still and watch it climb.</span>
+    </div>
+  </section>
+
+  <section class="controls">
+    <div class="row">
+      <div class="seg">
+        <span class="label">Source</span>
+        <div class="btns" role="group" aria-label="Video source">
+          <button id="srcScene" aria-pressed="true">Demo scene</button>
+          <button id="srcCam" aria-pressed="false">Camera</button>
+        </div>
+      </div>
+
+      <div class="seg">
+        <span class="label">Or a video file</span>
+        <label class="file">Choose file<input type="file" id="srcFile" accept="video/*"></label>
+      </div>
+
+      <div class="slider">
+        <span class="head"><span>Contrast threshold</span><output id="outC">0.15</output></span>
+        <input type="range" id="ctlC" min="0.03" max="0.60" step="0.01" value="0.15" aria-label="Contrast threshold">
+        <span class="why">How large a change a pixel needs before it speaks up.</span>
+      </div>
+
+      <div class="slider">
+        <span class="head"><span>Refractory</span><output id="outRef">1 ms</output></span>
+        <input type="range" id="ctlRef" min="0" max="30" step="1" value="1" aria-label="Refractory period">
+        <span class="why">Enforced silence after firing, so one bright edge cannot flood the bus.</span>
+      </div>
+
+      <div class="slider">
+        <span class="head"><span>Persistence</span><output id="outDecay">80 ms</output></span>
+        <input type="range" id="ctlDecay" min="16" max="400" step="4" value="80" aria-label="Display persistence">
+        <span class="why">How long an event stays lit on screen. A display choice, not part of the sensor.</span>
+      </div>
+
+      <div class="seg">
+        <span class="label">Array size</span>
+        <select id="ctlRes" aria-label="Sensor resolution">
+          <option value="160">160 × 120</option>
+          <option value="240" selected>240 × 180</option>
+          <option value="320">320 × 240</option>
+        </select>
+      </div>
+
+      <div class="seg">
+        <span class="label">Run</span>
+        <div class="btns"><button id="ctlPause" aria-pressed="false">Pause</button></div>
+      </div>
+    </div>
+
+    <p class="status" id="status">Demo scene running. The block marked STATIC never moves, so the sensor never mentions it again after the first frame.</p>
+  </section>
+
+  <section class="block">
+    <h2>How a single pixel decides</h2>
+    <p>Follow one pixel. The pale trace is the brightness it sees over three seconds. The stepped line is the only thing it remembers: the brightness it last reported. Whenever the trace pulls away from that memory by more than the threshold, the pixel fires one event and drags the memory to where it is now. Everything else about the scene is discarded.</p>
+    <div class="diagram">
+      <canvas id="pixelDiagram" width="1440" height="440" role="img"
+              aria-label="A brightness trace over three seconds with a stepped reference line, and the ON and OFF events produced each time the two diverge by more than the threshold."></canvas>
+    </div>
+    <p><strong>Drag the contrast threshold above and this diagram redraws.</strong> Widen the steps and the pixel grows quiet and coarse; narrow them and it chatters. That single number is the whole trade, and on real hardware it is not software at all — it is set by a bias current inside the pixel circuit.</p>
+  </section>
+
+  <section class="block">
+    <h2>Why anyone builds these</h2>
+    <div class="cols">
+      <div>
+        <h3>Time, not frames</h3>
+        <p>Each pixel timestamps itself to the microsecond. There is no shutter to be between, so there is no motion blur and nothing to miss between frames. A propeller, a bullet, a spark — all resolved by a sensor drawing a fraction of a watt.</p>
+      </div>
+      <div>
+        <h3>Sun and shadow at once</h3>
+        <p>Because the threshold is on relative change, a pixel behaves the same in glare and in near-darkness. Around 120 dB of range against roughly 60 dB for a conventional sensor: the difference between being blinded on exit from a tunnel and simply driving out of it.</p>
+      </div>
+      <div>
+        <h3>Silence is free</h3>
+        <p>An unchanged pixel costs no bandwidth, no memory and no computation. In a mostly-still world that is most of the array, most of the time — which is why these sensors turn up on drones, satellites and anything running off a battery.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>The model, exactly</h2>
+    <p>The whole sensor is four lines. Each pixel holds <code>L_ref</code>, the log brightness it last reported, and compares it against what it sees now.</p>
+    <div class="math">L(x, y, t)  =  log( ε + I(x, y, t) )
+
+if  L − L_ref  ≥  +C     emit ON  event,   L_ref ← L_ref + C
+if  L − L_ref  ≤  −C     emit OFF event,   L_ref ← L_ref − C
+
+then stay silent for a refractory period Δt_r</div>
+    <p><strong>Why the logarithm.</strong> A fixed threshold on log brightness is a fixed threshold on <em>relative</em> change, so a 20% change fires identically in direct sun and in a dim room. That one choice is where the dynamic range comes from.</p>
+    <p><strong>How the data rates are computed.</strong> The frame figure is width × height × 1 byte × the measured frame rate — 8-bit greyscale, uncompressed. The event figure is the measured event rate × 4 bytes, the usual packing for an address-event packet carrying x, y, timestamp and polarity. Payload only: no compression, no protocol overhead, no readout circuitry on either side.</p>
+    <p>The reduction is a property of the scene, not a specification. Point this at a still wall and it runs away to infinity. Point it at fast, high-contrast, full-field texture and the event stream can cost <em>more</em> than the frames. Both are one slider away, and both happen in the real world.</p>
+  </section>
+
+  <section class="block">
+    <h2>What this demo cannot show you</h2>
+    <p>It builds events out of ordinary video, so it inherits your webcam's frame rate. The sparsity you are watching is honest. The timing is not — a real event camera resolves to microseconds, roughly ten thousand times finer than the 33 ms grid these events land on. That timing, more than the data saving, is why the sensors exist.</p>
+    <ul class="limits">
+      <li>No per-pixel threshold mismatch, which on real arrays runs a few percent and makes the output noticeably grainier.</li>
+      <li>No shot noise and no spontaneous leak events, so this is cleaner than any real sensor in low light.</li>
+      <li>No bandwidth-limited readout or arbiter contention, so nothing is ever dropped under load.</li>
+      <li>No interpolation between frames — <em>v2e</em>, which this is a stripped-down version of, does model that properly.</li>
+    </ul>
+  </section>
+
+  <section class="block">
+    <h2>Sources</h2>
+    <ul class="refs">
+      <li><span class="who">Lichtsteiner, Posch &amp; Delbrück (2008).</span> <a href="https://ieeexplore.ieee.org/document/4444573">A 128×128 120 dB 15 µs Latency Asynchronous Temporal Contrast Vision Sensor</a>. <em>IEEE JSSC</em> — the original DVS.</li>
+      <li><span class="who">Gallego et al. (2020).</span> <a href="https://arxiv.org/abs/1904.08405">Event-based Vision: A Survey</a>. <em>IEEE TPAMI</em> — the field's reference text.</li>
+      <li><span class="who">Hu, Liu &amp; Delbrück (2021).</span> <a href="https://arxiv.org/abs/2006.07722">v2e: From Video Frames to Realistic DVS Events</a>. <em>CVPRW</em> — the realistic version of what this page does.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>One HTML file. No dependencies, no build step, no analytics, and no video leaving your machine — the sensor model runs entirely in this tab.</span>
+    <span>Built to understand the sensor from the inside out, as groundwork for training spiking neural networks on real event-camera recordings.</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var srcView = document.getElementById("srcView");
+  var evView  = document.getElementById("evView");
+  var srcCtx  = srcView.getContext("2d", { willReadFrequently: true });
+  var evCtx   = evView.getContext("2d");
+
+  var statusEl = document.getElementById("status");
+  var srcNote  = document.getElementById("srcNote");
+
+  // Polarity colours are fixed rather than read from CSS each frame: both
+  // viewports stay dark-grounded whichever theme the page is in.
+  var ON  = [0x35, 0xA7, 0xFF];
+  var OFF = [0xFF, 0x4D, 0x5A];
+  var BG  = [0x0B, 0x0E, 0x13];
+
+  var EPS = 0.02;          // keeps log() finite and damps noise in near-black pixels
+  var BYTES_PER_EVENT = 4; // 32-bit AER packet: x, y, timestamp, polarity
+  var BYTES_PER_PIXEL = 1; // 8-bit greyscale frame
+
+  var state = {
+    C: 0.15,
+    refractory: 1,
+    persistence: 80,
+    width: 240,
+    source: "scene",
+    paused: false
+  };
+
+  var W = 240, H = 180;
+  var ref, lastFire, evT, evP, evImage;
+
+  function allocate(width) {
+    W = width;
+    H = Math.round(width * 3 / 4);
+    srcView.width = W; srcView.height = H;
+    evView.width  = W; evView.height  = H;
+    var n = W * H;
+    ref      = new Float32Array(n);
+    lastFire = new Float32Array(n);
+    evT      = new Float32Array(n);
+    evP      = new Int8Array(n);
+    evImage  = evCtx.createImageData(W, H);
+    resetSensor();
+  }
+
+  function resetSensor() {
+    ref.fill(NaN);
+    lastFire.fill(-1e9);
+    evT.fill(-1e9);
+    evP.fill(0);
+  }
+
+  // ---- sources -------------------------------------------------------
+
+  var video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.loop = true;
+
+  var camStream = null;
+
+  function stopCam() {
+    if (camStream) {
+      camStream.getTracks().forEach(function (t) { t.stop(); });
+      camStream = null;
+    }
+  }
+
+  // Deliberately ordinary contrast. A pure black-on-white scene makes the
+  // event stream look far busier than any real one, because a single edge
+  // crossing a pixel then spans dozens of thresholds at once.
+  function drawScene(ctx, t) {
+    var u = W / 240;
+    var cx = 148 * u, cy = 96 * u;
+
+    ctx.fillStyle = "#6e6e6e";                       // wall
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#5f5f5f";                       // floor
+    ctx.fillRect(0, 132 * u, W, H - 132 * u);
+    ctx.fillStyle = "#7b7b7b";                       // furniture
+    ctx.fillRect(176 * u, 96 * u, 58 * u, 40 * u);
+    ctx.fillStyle = "#666";
+    ctx.fillRect(24 * u, 120 * u, 38 * u, 18 * u);
+
+    // Never moves. An ordinary camera re-transmits it thirty times a second;
+    // this sensor stops mentioning it after the first frame.
+    ctx.fillStyle = "#828282";
+    ctx.fillRect(10 * u, 10 * u, 52 * u, 30 * u);
+    ctx.fillStyle = "#3c3c3c";
+    ctx.font = "600 " + (9 * u).toFixed(1) + "px ui-monospace, Menlo, monospace";
+    ctx.fillText("STATIC", 17 * u, 29 * u);
+
+    ctx.save();                                      // rotating bar
+    ctx.translate(cx, cy);
+    ctx.rotate(t * 1.3);
+    ctx.fillStyle = "#c4c4c4";
+    ctx.fillRect(-42 * u, -4 * u, 84 * u, 8 * u);
+    ctx.restore();
+
+    ctx.beginPath();                                 // orbiting disc, darker
+    ctx.arc(cx + Math.cos(t * 2.1) * 38 * u, cy + Math.sin(t * 2.1) * 38 * u,
+            8 * u, 0, Math.PI * 2);
+    ctx.fillStyle = "#4a4a4a";
+    ctx.fill();
+
+    var period = 12 * u;                             // drifting grating
+    var shift = (t * 48 * u) % period;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(12 * u, 62 * u, 74 * u, 44 * u);
+    ctx.clip();
+    ctx.fillStyle = "#8d8d8d";
+    ctx.fillRect(12 * u, 62 * u, 74 * u, 44 * u);
+    ctx.fillStyle = "#616161";
+    for (var x = 12 * u - period; x < 90 * u; x += period) {
+      ctx.fillRect(x + shift, 62 * u, period / 2, 44 * u);
+    }
+    ctx.restore();
+  }
+
+  function drawSource(t) {
+    if (state.source === "scene") {
+      drawScene(srcCtx, t);
+    } else if (video.readyState >= 2) {
+      var vw = video.videoWidth, vh = video.videoHeight;
+      var scale = Math.max(W / vw, H / vh);           // cover-fit, never distorted
+      var dw = vw * scale, dh = vh * scale;
+      srcCtx.save();
+      if (state.source === "cam") {                   // self-view reads mirrored
+        srcCtx.translate(W, 0);
+        srcCtx.scale(-1, 1);
+      }
+      srcCtx.drawImage(video, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      srcCtx.restore();
+    } else {
+      srcCtx.fillStyle = "#000";
+      srcCtx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // ---- the sensor ----------------------------------------------------
+
+  function integrate(nowMs) {
+    var img = srcCtx.getImageData(0, 0, W, H).data;
+    var n = W * H;
+    var C = state.C;
+    var refr = state.refractory;
+    var events = 0, active = 0;
+
+    for (var i = 0, p = 0; i < n; i++, p += 4) {
+      var lum = (0.299 * img[p] + 0.587 * img[p + 1] + 0.114 * img[p + 2]) / 255;
+      var L = Math.log(EPS + lum);
+
+      var r = ref[i];
+      if (r !== r) { ref[i] = L; continue; }   // first sighting: just latch
+
+      var diff = L - r;
+      if (diff >= C || diff <= -C) {
+        if (nowMs - lastFire[i] < refr) continue;
+
+        var pol = diff > 0 ? 1 : -1;
+        // One event per threshold crossed: a pixel that jumped several
+        // thresholds between frames would really have fired several times.
+        var count = Math.floor(Math.abs(diff) / C);
+
+        ref[i] = r + pol * count * C;
+        lastFire[i] = nowMs;
+        evT[i] = nowMs;
+        evP[i] = pol;
+        events += count;
+        active++;
+      }
+    }
+    return { events: events, active: active };
+  }
+
+  function renderEvents(nowMs) {
+    var d = evImage.data;
+    var n = W * H;
+    var life = state.persistence;
+
+    for (var i = 0, p = 0; i < n; i++, p += 4) {
+      var age = nowMs - evT[i];
+      var a = age < life ? 1 - age / life : 0;
+      if (a > 0) {
+        var c = evP[i] > 0 ? ON : OFF;
+        d[p]     = BG[0] + (c[0] - BG[0]) * a;
+        d[p + 1] = BG[1] + (c[1] - BG[1]) * a;
+        d[p + 2] = BG[2] + (c[2] - BG[2]) * a;
+      } else {
+        d[p] = BG[0]; d[p + 1] = BG[1]; d[p + 2] = BG[2];
+      }
+      d[p + 3] = 255;
+    }
+    evCtx.putImageData(evImage, 0, 0);
+  }
+
+  // ---- telemetry -----------------------------------------------------
+
+  var ema = { rate: 0, active: 0, fps: 30 };
+  var lastStatPaint = 0;
+
+  var statRate    = document.getElementById("statRate");
+  var statActive  = document.getElementById("statActive");
+  var statFrameBw = document.getElementById("statFrameBw");
+  var statEventBw = document.getElementById("statEventBw");
+  var statRatio   = document.getElementById("statRatio");
+
+  function setValue(el, text, unit) {
+    el.firstChild.nodeValue = text;
+    el.lastChild.firstChild.nodeValue = unit;
+  }
+
+  // a short rolling history, so the rate reads as a live signal not a number
+  var spark = document.getElementById("rateSpark");
+  var sCtx = spark.getContext("2d");
+  var history = new Float64Array(96);
+  var histAt = 0, histFilled = 0;
+
+  function drawSpark() {
+    var w = spark.width, h = spark.height, pad = 3;
+    sCtx.clearRect(0, 0, w, h);
+    if (histFilled < 2) return;
+
+    var peak = 1;
+    for (var i = 0; i < histFilled; i++) if (history[i] > peak) peak = history[i];
+    peak *= 1.35;                          // headroom, so the trace is a line not a block
+
+    var n = history.length;
+    function px(k) { return (k / (n - 1)) * w; }
+    function py(v) { return h - pad - (v / peak) * (h - pad * 2); }
+
+    sCtx.beginPath();
+    sCtx.moveTo(0, h);
+    for (i = 0; i < n; i++) {
+      var v = history[(histAt + i) % n];
+      sCtx.lineTo(px(i), py(v));
+    }
+    sCtx.lineTo(w, h);
+    sCtx.closePath();
+    sCtx.fillStyle = (cssVar("--accent") || "#E8B33C") + "1c";
+    sCtx.fill();
+
+    sCtx.beginPath();
+    for (i = 0; i < n; i++) {
+      var y = py(history[(histAt + i) % n]);
+      if (i === 0) sCtx.moveTo(px(i), y); else sCtx.lineTo(px(i), y);
+    }
+    sCtx.strokeStyle = cssVar("--accent") || "#E8B33C";
+    sCtx.lineWidth = 3;
+    sCtx.lineJoin = "round";
+    sCtx.stroke();
+  }
+
+  function paintStats(nowMs) {
+    if (nowMs - lastStatPaint < 120) return;
+    lastStatPaint = nowMs;
+
+    history[histAt] = ema.rate;
+    histAt = (histAt + 1) % history.length;
+    if (histFilled < history.length) histFilled++;
+    drawSpark();
+
+    var evPerSec = ema.rate;
+    var frameBps = W * H * BYTES_PER_PIXEL * ema.fps;
+    var eventBps = evPerSec * BYTES_PER_EVENT;
+    var ratio = eventBps > 1 ? frameBps / eventBps : Infinity;
+
+    setValue(statRate,
+      evPerSec >= 1000 ? (evPerSec / 1000).toFixed(1) : evPerSec.toFixed(0),
+      evPerSec >= 1000 ? "k ev/s" : "ev/s");
+    setValue(statActive, (ema.active * 100).toFixed(1), "%");
+    setValue(statFrameBw, (frameBps / 1000).toFixed(0), "kB/s");
+    setValue(statEventBw, (eventBps / 1000).toFixed(1), "kB/s");
+    setValue(statRatio,
+      !isFinite(ratio) ? "∞" : ratio >= 100 ? ratio.toFixed(0) : ratio.toFixed(1), "×");
+  }
+
+  // ---- the one-pixel diagram -----------------------------------------
+  // Runs the same threshold rule as integrate(), on a synthetic trace, so
+  // the picture cannot drift out of step with the simulation beside it.
+
+  var diagram = document.getElementById("pixelDiagram");
+  var dCtx = diagram.getContext("2d");
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // Straight in log space, because that is the quantity the pixel compares.
+  // A slow swing, a little texture on top, and one fast flash near t = 2.2.
+  function logTrace(t) {                  // t in [0, 3] seconds
+    return -1.55
+      + 0.62 * Math.sin(t * 2.0 - 0.6)
+      + 0.20 * Math.sin(t * 5.4 + 1.2)
+      + 0.80 * Math.exp(-Math.pow((t - 2.2) / 0.085, 2));
+  }
+
+  function drawDiagram() {
+    var w = diagram.width, h = diagram.height;
+    var C = state.C;
+
+    var padL = 58, padR = 40, padT = 84;   // padT leaves room for the legend
+    var laneH = 78;                        // event lane at the bottom
+    var plotH = h - padT - laneH - 62;
+    var plotW = w - padL - padR;
+
+    var textC   = cssVar("--text")   || "#DCE3EC";
+    var mutedC  = cssVar("--muted")  || "#8895A6";
+    var faintC  = cssVar("--faint")  || "#5B6675";
+    var lineC   = cssVar("--line")   || "#262F3B";
+    var accentC = cssVar("--accent") || "#E8B33C";
+    var onC     = cssVar("--on")     || "#35A7FF";
+    var offC    = cssVar("--off")    || "#FF4D5A";
+
+    dCtx.clearRect(0, 0, w, h);
+    dCtx.lineJoin = "round";
+    dCtx.lineCap = "round";
+
+    // sample the trace in log space, exactly as the sensor sees it
+    var N = 900, T = 3;
+    var xs = new Float64Array(N), Ls = new Float64Array(N);
+    var lo = Infinity, hi = -Infinity;
+    for (var i = 0; i < N; i++) {
+      var t = (i / (N - 1)) * T;
+      var L = logTrace(t);
+      xs[i] = t; Ls[i] = L;
+      if (L < lo) lo = L;
+      if (L > hi) hi = L;
+    }
+    var margin = Math.max((hi - lo) * 0.22, C * 1.4);
+    lo -= margin; hi += margin;
+
+    function X(t) { return padL + (t / T) * plotW; }
+    function Y(L) { return padT + (1 - (L - lo) / (hi - lo)) * plotH; }
+
+    // run the rule
+    var events = [];
+    var refL = Ls[0];
+    var steps = [{ t: 0, L: refL }];
+    for (i = 1; i < N; i++) {
+      var diff = Ls[i] - refL;
+      while (Math.abs(diff) >= C) {
+        var pol = diff > 0 ? 1 : -1;
+        refL += pol * C;
+        events.push({ t: xs[i], L: refL, pol: pol });
+        steps.push({ t: xs[i], L: refL });
+        diff = Ls[i] - refL;
+      }
+    }
+
+    // baseline + frame
+    dCtx.strokeStyle = lineC;
+    dCtx.lineWidth = 1;
+    dCtx.beginPath();
+    dCtx.moveTo(padL, padT - 8);
+    dCtx.lineTo(padL, padT + plotH + 10);
+    dCtx.moveTo(padL, padT + plotH + 10);
+    dCtx.lineTo(padL + plotW, padT + plotH + 10);
+    dCtx.stroke();
+
+    // the remembered reference, as a staircase
+    dCtx.strokeStyle = accentC;
+    dCtx.lineWidth = 2.5;
+    dCtx.beginPath();
+    dCtx.moveTo(X(steps[0].t), Y(steps[0].L));
+    for (i = 1; i < steps.length; i++) {
+      dCtx.lineTo(X(steps[i].t), Y(steps[i - 1].L));
+      dCtx.lineTo(X(steps[i].t), Y(steps[i].L));
+    }
+    dCtx.lineTo(X(T), Y(steps[steps.length - 1].L));
+    dCtx.stroke();
+
+    // the brightness the pixel actually sees
+    dCtx.strokeStyle = textC;
+    dCtx.lineWidth = 3;
+    dCtx.beginPath();
+    for (i = 0; i < N; i++) {
+      if (i === 0) dCtx.moveTo(X(xs[i]), Y(Ls[i]));
+      else dCtx.lineTo(X(xs[i]), Y(Ls[i]));
+    }
+    dCtx.stroke();
+
+    // One threshold, shown to scale in the empty upper-right of the plot.
+    var scaleH = (C / (hi - lo)) * plotH;
+    var bx = padL + plotW - 24;
+    var byTop = padT + 16, byBot = byTop + scaleH;
+    dCtx.strokeStyle = mutedC;
+    dCtx.lineWidth = 2;
+    dCtx.beginPath();
+    dCtx.moveTo(bx, byTop); dCtx.lineTo(bx, byBot);
+    dCtx.moveTo(bx - 8, byTop); dCtx.lineTo(bx + 8, byTop);
+    dCtx.moveTo(bx - 8, byBot); dCtx.lineTo(bx + 8, byBot);
+    dCtx.stroke();
+
+    dCtx.fillStyle = mutedC;
+    dCtx.font = "600 22px ui-monospace, Menlo, monospace";
+    dCtx.textAlign = "right";
+    dCtx.textBaseline = "middle";
+    dCtx.fillText("one step, C = " + C.toFixed(2), bx - 16, (byTop + byBot) / 2);
+    dCtx.textBaseline = "alphabetic";
+
+    // event lane
+    var laneY = padT + plotH + 52;
+    dCtx.strokeStyle = lineC;
+    dCtx.lineWidth = 1;
+    dCtx.beginPath();
+    dCtx.moveTo(padL, laneY);
+    dCtx.lineTo(padL + plotW, laneY);
+    dCtx.stroke();
+
+    events.forEach(function (e) {
+      var ex = X(e.t);
+      var up = e.pol > 0;
+      dCtx.fillStyle = up ? onC : offC;
+      dCtx.beginPath();
+      if (up) {
+        dCtx.moveTo(ex, laneY - 26);
+        dCtx.lineTo(ex - 6.5, laneY - 4);
+        dCtx.lineTo(ex + 6.5, laneY - 4);
+      } else {
+        dCtx.moveTo(ex, laneY + 26);
+        dCtx.lineTo(ex - 6.5, laneY + 4);
+        dCtx.lineTo(ex + 6.5, laneY + 4);
+      }
+      dCtx.closePath();
+      dCtx.fill();
+    });
+
+    // legend across the top, so nothing crowds the plot itself
+    var lx = padL, ly = 40;
+    dCtx.textAlign = "left";
+    dCtx.textBaseline = "middle";
+    dCtx.font = "500 23px ui-sans-serif, -apple-system, system-ui, sans-serif";
+
+    function legendLine(colour, label, dashed) {
+      dCtx.strokeStyle = colour;
+      dCtx.lineWidth = 3;
+      dCtx.setLineDash(dashed ? [6, 5] : []);
+      dCtx.beginPath();
+      dCtx.moveTo(lx, ly);
+      dCtx.lineTo(lx + 30, ly);
+      dCtx.stroke();
+      dCtx.setLineDash([]);
+      dCtx.fillStyle = mutedC;
+      dCtx.fillText(label, lx + 40, ly + 1);
+      lx += 40 + dCtx.measureText(label).width + 40;
+    }
+
+    legendLine(textC, "brightness this pixel sees (log scale)");
+    legendLine(accentC, "brightness it last reported");
+
+    dCtx.fillStyle = onC;                            // event markers
+    dCtx.beginPath();
+    dCtx.moveTo(lx + 9, ly - 11); dCtx.lineTo(lx, ly + 5); dCtx.lineTo(lx + 18, ly + 5);
+    dCtx.closePath(); dCtx.fill();
+    dCtx.fillStyle = offC;
+    dCtx.beginPath();
+    dCtx.moveTo(lx + 33, ly + 11); dCtx.lineTo(lx + 24, ly - 5); dCtx.lineTo(lx + 42, ly - 5);
+    dCtx.closePath(); dCtx.fill();
+    dCtx.fillStyle = mutedC;
+    dCtx.fillText("events it sends out", lx + 54, ly + 1);
+
+    // axis ends and the running count
+    dCtx.font = "500 21px ui-sans-serif, -apple-system, system-ui, sans-serif";
+    dCtx.fillStyle = faintC;
+    dCtx.textAlign = "left";
+    dCtx.fillText("0 s", padL, padT + plotH + 34);
+    dCtx.textAlign = "right";
+    dCtx.fillText("3 s", padL + plotW, padT + plotH + 34);
+
+    dCtx.textAlign = "right";
+    dCtx.fillStyle = mutedC;
+    dCtx.font = "600 23px ui-monospace, Menlo, monospace";
+    dCtx.fillText(events.length + " events in 3 seconds", padL + plotW, h - 20);
+    dCtx.textBaseline = "alphabetic";
+  }
+
+  // ---- loop ----------------------------------------------------------
+
+  var lastFrame = 0;
+
+  function tick(nowMs) {
+    requestAnimationFrame(tick);
+    if (state.paused) return;
+
+    var dt = lastFrame ? (nowMs - lastFrame) / 1000 : 1 / 60;
+    lastFrame = nowMs;
+    if (dt > 0.002 && dt < 1) ema.fps += (1 / dt - ema.fps) * 0.08;
+
+    drawSource(nowMs / 1000);
+    var r = integrate(nowMs);
+    renderEvents(nowMs);
+
+    var instRate = dt > 0 ? r.events / dt : 0;
+    ema.rate   += (instRate - ema.rate) * 0.15;
+    ema.active += (r.active / (W * H) - ema.active) * 0.15;
+
+    paintStats(nowMs);
+  }
+
+  // ---- controls ------------------------------------------------------
+
+  var btnScene = document.getElementById("srcScene");
+  var btnCam   = document.getElementById("srcCam");
+  var btnPause = document.getElementById("ctlPause");
+
+  function setSourceButtons(which) {
+    btnScene.setAttribute("aria-pressed", String(which === "scene"));
+    btnCam.setAttribute("aria-pressed", String(which === "cam"));
+  }
+
+  function say(text, warn) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle("warn", !!warn);
+  }
+
+  btnScene.addEventListener("click", function () { goScene(); });
+
+  // ---- camera ---------------------------------------------------------
+
+  var camBar   = document.getElementById("camBar");
+  var camTitle = document.getElementById("camTitle");
+  var camSub   = document.getElementById("camSub");
+  var camStart = document.getElementById("camStart");
+
+  var embedded = window.self !== window.top;
+
+  // The camera prompt lives in its own bar above the panels. Nothing is
+  // allowed to cover the comparison -- that is the thing people came for.
+  function setCam(title, sub, ctaLabel, warn) {
+    camTitle.textContent = title;
+    camSub.textContent = sub;
+    camStart.textContent = ctaLabel || "";
+    camStart.hidden = !ctaLabel;
+    camBar.classList.toggle("warn", !!warn);
+  }
+
+  function policyBlocksCamera() {
+    try {
+      var fp = document.featurePolicy || document.permissionsPolicy;
+      if (fp && typeof fp.allowsFeature === "function") return !fp.allowsFeature("camera");
+    } catch (e) { /* unsupported: just try the request */ }
+    return false;
+  }
+
+  // Explain each failure in terms of what the viewer can do about it.
+  function explainCameraError(err) {
+    var name = err && err.name;
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      if (embedded) {
+        return {
+          title: "Camera blocked in this preview",
+          sub: "Preview frames withhold camera permission, and opening this URL in a new tab keeps the frame. Serve the page from its own address and it will ask you properly.",
+          cta: "Try again"
+        };
+      }
+      return {
+        title: "Camera permission declined",
+        sub: "Allow camera access for this page from your browser's address bar, then try again.",
+        cta: "Try again"
+      };
+    }
+    if (name === "NotFoundError" || name === "OverconstrainedError") {
+      return { title: "No camera found", sub: "This device has no camera the browser can open. The demo scene and video files still work.", cta: null };
+    }
+    if (name === "NotReadableError") {
+      return { title: "Camera is busy", sub: "Another application is holding the camera. Close it and try again.", cta: "Try again" };
+    }
+    return { title: "Camera unavailable", sub: "The browser refused the request (" + name + "). The demo scene and video files still work.", cta: "Try again" };
+  }
+
+  function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCam("No camera API in this browser.",
+        "getUserMedia is not available here. The demo scene and video files still work.", null, true);
+      return;
+    }
+    setCam("Waiting for permission.", "Your browser should be asking now.", null);
+    say("Requesting camera…");
+
+    navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+      .then(function (stream) {
+        camStream = stream;
+        video.srcObject = stream;
+        return video.play();
+      })
+      .then(function () {
+        state.source = "cam";
+        setSourceButtons("cam");
+        srcNote.textContent = "your camera, mirrored";
+        resetSensor();
+        setCam("That is you, on the right.",
+          "Hold still and you drain away to black. Move and you return as edges only — blue where a pixel brightened, red where it darkened.",
+          "Back to demo scene");
+        say("Live camera running.");
+      })
+      .catch(function (err) {
+        var e = explainCameraError(err);
+        setCam(e.title, e.sub, e.cta, true);
+        setSourceButtons("scene");
+        say(e.title + " — the demo scene is still running.", true);
+      });
+  }
+
+  function goScene() {
+    stopCam();
+    video.removeAttribute("src");
+    state.source = "scene";
+    setSourceButtons("scene");
+    srcNote.textContent = "demo scene";
+    resetSensor();
+    setCam("Point it at yourself.",
+      "Hold still and you disappear. Move and you come back as edges. Your video is processed inside this page and never uploaded anywhere.",
+      "Turn on camera");
+    say("Demo scene running. The block marked STATIC never moves, so the sensor never mentions it again after the first frame.");
+  }
+
+  camStart.addEventListener("click", function () {
+    if (state.source === "cam") goScene();
+    else startCamera();
+  });
+  btnCam.addEventListener("click", startCamera);
+
+  if (policyBlocksCamera()) {
+    setCam("Camera blocked in this preview.",
+      "The frame around this page withholds camera permission. Serve the page from its own address to point it at yourself — everything else here works normally.",
+      null, true);
+  }
+
+  document.getElementById("srcFile").addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    stopCam();
+    video.srcObject = null;
+    video.src = URL.createObjectURL(file);
+    video.play().then(function () {
+      state.source = "file";
+      setSourceButtons("file");
+      srcNote.textContent = file.name;
+      resetSensor();
+      setCam("Running your clip through the sensor.",
+        "Everything on the right is what an event camera would have transmitted while this video played.",
+        "Turn on camera");
+      say("Playing " + file.name + " through the pixel model.");
+    }).catch(function () {
+      say("That file could not be decoded by this browser.", true);
+    });
+  });
+
+  btnPause.addEventListener("click", function () {
+    state.paused = !state.paused;
+    btnPause.textContent = state.paused ? "Resume" : "Pause";
+    btnPause.setAttribute("aria-pressed", String(state.paused));
+    if (!state.paused) lastFrame = 0;
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.code === "Space" && e.target === document.body) {
+      e.preventDefault();
+      btnPause.click();
+    }
+  });
+
+  var ctlC = document.getElementById("ctlC"), outC = document.getElementById("outC");
+  ctlC.addEventListener("input", function () {
+    state.C = parseFloat(ctlC.value);
+    outC.textContent = state.C.toFixed(2);
+    drawDiagram();
+  });
+
+  var ctlRef = document.getElementById("ctlRef"), outRef = document.getElementById("outRef");
+  ctlRef.addEventListener("input", function () {
+    state.refractory = parseFloat(ctlRef.value);
+    outRef.textContent = state.refractory + " ms";
+  });
+
+  var ctlDecay = document.getElementById("ctlDecay"), outDecay = document.getElementById("outDecay");
+  ctlDecay.addEventListener("input", function () {
+    state.persistence = parseFloat(ctlDecay.value);
+    outDecay.textContent = state.persistence + " ms";
+  });
+
+  document.getElementById("ctlRes").addEventListener("change", function (e) {
+    state.width = parseInt(e.target.value, 10);
+    allocate(state.width);
+  });
+
+  // the diagram is drawn in theme colours, so it has to follow the theme
+  if (window.matchMedia) {
+    var mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (mq.addEventListener) mq.addEventListener("change", drawDiagram);
+  }
+  new MutationObserver(drawDiagram).observe(document.documentElement, {
+    attributes: true, attributeFilter: ["data-theme"]
+  });
+
+  allocate(state.width);
+  drawDiagram();
+  requestAnimationFrame(tick);
+})();
+</script>
